@@ -1,0 +1,60 @@
+function pdfmerge() {
+  if [[ $# -lt 2 ]]; then
+    echo "usage: $0 <out.pdf> <in1.pdf> <in2.pdf> ... <inn.pdf>" >&2
+    return 1
+  fi
+  local output="$1"
+  shift
+  local inputs=("$@")
+  # Natural sort (Lecture-1, Lecture-2, ..., Lecture-10) instead of lexicographic
+  local sorted=()
+  while IFS= read -r line; do sorted+=("$line"); done < <(printf '%s\n' "${inputs[@]}" | sort -V)
+  inputs=("${sorted[@]}")
+
+  # Prefer venv with pypdf (avoids pip "externally-managed-environment" on macOS)
+  local py=
+  local candidates=(
+    "$HOME/development/mac-tools/pdfmerge/.venv/bin/python3"
+    "./.venv/bin/python3"
+    "python3"
+  )
+  [[ -n "${PDFMERGE_VENV}" ]] && candidates=("${PDFMERGE_VENV}/bin/python3" "${candidates[@]}")
+
+  for cand in "${candidates[@]}"; do
+    if "$cand" -c 'from pypdf import PdfWriter, PdfReader' 2>/dev/null; then
+      py="$cand"
+      break
+    fi
+  done
+
+  if [[ -n "$py" ]]; then
+    # Merge with bookmarks (each PDF gets a bookmark = filename without .pdf)
+    "$py" -c '
+import sys
+import os
+
+from pypdf import PdfWriter, PdfReader
+
+output = sys.argv[1]
+inputs = sys.argv[2:]
+
+writer = PdfWriter()
+for path in inputs:
+  if not os.path.exists(path):
+    print(f"Error: File not found: {path}", file=sys.stderr)
+    sys.exit(1)
+  start_page = len(writer.pages)
+  reader = PdfReader(path)
+  writer.append(reader)
+  bookmark_name = os.path.splitext(os.path.basename(path))[0]
+  writer.add_outline_item(bookmark_name, start_page)
+
+writer.write(output)
+' "$output" "${inputs[@]}"
+  else
+    # Fallback: merge with Ghostscript (no bookmarks)
+    echo "Note: Install pypdf for bookmark support: pip install pypdf" >&2
+    gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress \
+       -sOutputFile="$output" "${inputs[@]}"
+  fi
+}
