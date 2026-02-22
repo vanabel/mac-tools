@@ -1,0 +1,26 @@
+# YouTube / Rutube video downloader (yt-dlp wrapper)
+# Source this file or add to .zshrc: source ~/development/mac-tools/video-downloader/download
+
+video-download() {
+  if [[ $# -lt 1 ]]; then
+    echo "usage: $0 <url>" >&2
+    echo "  Downloads video as MP4. Supports YouTube, Rutube, and other sites yt-dlp supports." >&2
+    return 1
+  fi
+  local ext_opts=()
+  if command -v aria2c &>/dev/null; then
+    ext_opts=(--external-downloader aria2c --external-downloader-args "aria2c:-x 16 -k 1M")
+  fi
+  yt-dlp "${ext_opts[@]}" \
+    -f "bestvideo[ext=mp4][vcodec=mpeg4]+bestaudio[ext=mp4][acodec=ac3]/best[ext=mp4]" \
+    -o "%(title)s.%(ext)s" "$1"
+}
+
+video-download-list() {
+  if [[ $# -lt 1 ]]; then
+    echo "usage: $0 <url>" >&2
+    echo "  Lists available formats for the given video URL." >&2
+    return 1
+  fi
+  yt-dlp --list-formats --merge-output-format "mp4" "$1"
+}
