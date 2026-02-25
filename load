@@ -1,0 +1,33 @@
+# mac-tools loader: source all tools and provide mac-tools-help
+# Add to ~/.zshrc:  source ~/development/mac-tools/load
+
+MAC_TOOLS_ROOT="${MAC_TOOLS_ROOT:-$HOME/development/mac-tools}"
+
+source "$MAC_TOOLS_ROOT/video-downloader/download"
+source "$MAC_TOOLS_ROOT/pdfmerge/pdfmerge"
+source "$MAC_TOOLS_ROOT/mp4towav/mp4towav"
+source "$MAC_TOOLS_ROOT/whisper-srt/whisper-srt"
+source "$MAC_TOOLS_ROOT/media-tools/media-tools"
+source "$MAC_TOOLS_ROOT/pdf-tools/pdf-tools"
+
+# Show all mac-tools functions in a table (run: mac-tools-help or mthelp)
+mac-tools-help() {
+  local name desc
+  printf "\n  \033[1m%-22s\033[0m  %s\n" "FUNCTION" "DESCRIPTION"
+  printf "  %s  %s\n" "----------------------" "----------------------------------------"
+  printf "  %-22s  %s\n" "video-download"       "Download video as MP4 (yt-dlp)"
+  printf "  %-22s  %s\n" "video-download-list"  "List formats for video URL"
+  printf "  %-22s  %s\n" "pdfmerge"             "Merge PDFs with bookmarks, natural sort"
+  printf "  %-22s  %s\n" "mp4towav"             "Extract 16 kHz mono WAV from video"
+  printf "  %-22s  %s\n" "whisper-srt"          "Generate SRT from video via whisper-server"
+  printf "  %-22s  %s\n" "whisper-srt-server"   "Start whisper-server"
+  printf "  %-22s  %s\n" "mp4tomp3"             "Extract MP3 from MP4"
+  printf "  %-22s  %s\n" "ffcompress"           "Compress MOV/MP4 to smaller MP4 (VideoToolbox)"
+  printf "  %-22s  %s\n" "pdfextract"           "Extract pages from PDF (qpdf)"
+  printf "  %-22s  %s\n" "pdf_crop"             "Crop PDF margins by cm"
+  printf "  %-22s  %s\n" "pdfcompress"         "Compress PDF to screen quality"
+  printf "\n  Run \033[1m<function> -h\033[0m or \033[1m<function> --help\033[0m for usage of each.\n\n"
+}
+
+# Short alias for mac-tools-help
+mthelp() { mac-tools-help "$@"; }

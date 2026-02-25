@@ -1,0 +1,72 @@
+# Media tools: mp4tomp3, ffcompress
+# Source: source ~/development/mac-tools/media-tools/media-tools
+
+# ---- Extract MP3 from MP4 ----
+# Usage: mp4tomp3 input.mp4 [output.mp3]
+mp4tomp3() {
+  if [[ -z "$1" ]]; then
+    echo "Usage: mp4tomp3 input.mp4 [output.mp3]"
+    return 1
+  fi
+
+  local input="$1"
+  local output="${2:-${input%.*}.mp3}"
+
+  if [[ ! -f "$input" ]]; then
+    echo "media-tools: file not found: $input" >&2
+    return 1
+  fi
+
+  if ! command -v ffprobe >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "media-tools: ffmpeg is required (brew install ffmpeg)" >&2
+    return 1
+  fi
+
+  local codec
+  codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name \
+          -of default=noprint_wrappers=1:nokey=1 "$input" 2>/dev/null)
+
+  if [[ "$codec" == "mp3" ]]; then
+    echo "Audio codec is already mp3 → using copy"
+    ffmpeg -y -i "$input" -vn -acodec copy "$output"
+  else
+    echo "Audio codec is ${codec:-unknown} → re-encoding to mp3"
+    ffmpeg -y -i "$input" -q:a 0 -map a "$output"
+  fi
+}
+
+# ---- Compress MOV/MP4 to smaller MP4 (VideoToolbox) ----
+# Usage: ffcompress input.mov [output.mp4] [video_kbps]
+ffcompress() {
+  if [[ $# -lt 1 ]]; then
+    echo "Usage: ffcompress input.mov [output.mp4] [video_kbps]"
+    echo "  Default: output = <input>_compressed.mp4, video_kbps = 2500"
+    return 1
+  fi
+
+  local input="$1"
+  local output="${2:-${input%.*}_compressed.mp4}"
+  local vkbps="${3:-2500}"
+
+  if [[ ! -f "$input" ]]; then
+    echo "media-tools: file not found: $input" >&2
+    return 1
+  fi
+
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "media-tools: ffmpeg is required (brew install ffmpeg)" >&2
+    return 1
+  fi
+
+  ffmpeg -y -stats -stats_period 0.5 \
+    -hwaccel videotoolbox \
+    -i "$input" \
+    -map 0:v:0 -map '0:a?' \
+    -c:v h264_videotoolbox \
+    -profile:v high \
+    -b:v "${vkbps}k" -maxrate "$((vkbps+500))k" -bufsize "$((vkbps*2))k" \
+    -vf "scale=1280:-2" \
+    -c:a aac -b:a 96k \
+    -movflags +faststart \
+    "$output"
+}

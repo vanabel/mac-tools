@@ -1,0 +1,113 @@
+# PDF tools: pdfextract, pdf_crop, pdfcompress (qpdf/gs)
+# Source: source ~/development/mac-tools/pdf-tools/pdf-tools
+
+# ---- Extract pages from PDF (qpdf) ----
+# Usage: pdfextract input.pdf "pages" output.pdf
+# Example: pdfextract input.pdf "1,3-5,28" output.pdf
+pdfextract() {
+  if [[ $# -ne 3 ]]; then
+    echo "Usage: pdfextract input.pdf \"pages\" output.pdf"
+    echo "Example: pdfextract input.pdf \"1,28\" output.pdf"
+    return 1
+  fi
+
+  local infile="$1"
+  local pages="$2"
+  local outfile="$3"
+
+  if [[ ! -f "$infile" ]]; then
+    echo "pdf-tools: input file not found: $infile" >&2
+    return 1
+  fi
+
+  if ! command -v qpdf >/dev/null 2>&1; then
+    echo "pdf-tools: qpdf is required (brew install qpdf)" >&2
+    return 1
+  fi
+
+  qpdf "$infile" --pages "$infile" "$pages" -- "$outfile"
+}
+
+# ---- Crop PDF by cutting margin (cm) ----
+# Usage: pdf_crop <cm_to_cut> <input.pdf>
+# Example: pdf_crop 1 slides.pdf  →  slides-cropped.pdf
+pdf_crop() {
+  if [[ "$1" == "-h" || "$1" == "--help" || $# -ne 2 ]]; then
+    echo "Usage: pdf_crop <cm_to_cut> <input.pdf>"
+    echo "Example: pdf_crop 1 slides.pdf"
+    return
+  fi
+
+  local cm_cut="$1"
+  local pdf_file="$2"
+
+  if [[ ! -f "$pdf_file" ]]; then
+    echo "pdf-tools: file not found: $pdf_file" >&2
+    return 1
+  fi
+
+  if ! command -v gs >/dev/null 2>&1; then
+    echo "pdf-tools: Ghostscript (gs) is required (brew install ghostscript)" >&2
+    return 1
+  fi
+
+  local pt_cut
+  pt_cut=$(echo "$cm_cut * 28.35" | bc -l)
+
+  local bbox_output
+  bbox_output=$(gs -dBATCH -dNOPAUSE -q -sDEVICE=bbox "$pdf_file" 2>&1 | grep "HiResBoundingBox" | head -n1)
+
+  if [[ -z "$bbox_output" ]]; then
+    echo "pdf-tools: failed to extract bounding box from $pdf_file" >&2
+    return 1
+  fi
+
+  local _ xmin ymin xmax ymax
+  read _ xmin ymin xmax ymax <<<"$bbox_output"
+
+  local new_xmin new_ymin new_xmax new_ymax
+  new_xmin=$(echo "$xmin + $pt_cut" | bc -l)
+  new_ymin=$(echo "$ymin + $pt_cut" | bc -l)
+  new_xmax=$(echo "$xmax - $pt_cut" | bc -l)
+  new_ymax=$(echo "$ymax - $pt_cut" | bc -l)
+
+  local base="${pdf_file%.*}"
+  local output="${base}-cropped.pdf"
+
+  gs -o "$output" -sDEVICE=pdfwrite \
+     -dUseCropBox \
+     -c "[/CropBox [$new_xmin $new_ymin $new_xmax $new_ymax] /PAGES pdfmark" \
+     -f "$pdf_file"
+  echo "Saved: $output"
+}
+
+# ---- Compress PDF (screen quality, smaller file) ----
+# Usage: pdfcompress input.pdf  →  input.compressed.pdf
+pdfcompress() {
+  if [[ $# -ne 1 ]]; then
+    echo "Usage: pdfcompress input.pdf"
+    return 1
+  fi
+
+  local input="$1"
+
+  if [[ ! -f "$input" ]]; then
+    echo "pdf-tools: file not found: $input" >&2
+    return 1
+  fi
+
+  if ! command -v gs >/dev/null 2>&1; then
+    echo "pdf-tools: Ghostscript (gs) is required (brew install ghostscript)" >&2
+    return 1
+  fi
+
+  local output="${input%.*}.compressed.pdf"
+  gs -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite \
+    -dCompatibilityLevel=1.3 -dPDFSETTINGS=/screen \
+    -dEmbedAllFonts=true -dSubsetFonts=true \
+    -dColorImageDownsampleType=/Bicubic -dColorImageResolution=144 \
+    -dGrayImageDownsampleType=/Bicubic -dGrayImageResolution=144 \
+    -dMonoImageDownsampleType=/Bicubic -dMonoImageResolution=144 \
+    -sOutputFile="$output" "$input"
+  echo "Saved: $output"
+}
