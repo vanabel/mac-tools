@@ -1,0 +1,32 @@
+# mp4towav: Extract audio from video for speech recognition (16 kHz mono WAV)
+# Source: source ~/development/mac-tools/mp4towav/mp4towav
+
+mp4towav() {
+  if [[ $# -lt 1 ]]; then
+    echo "usage: mp4towav <video-file> [output.wav]" >&2
+    echo "  Extracts audio as 16 kHz mono WAV (suitable for 语音识别 / ASR)." >&2
+    return 1
+  fi
+
+  local input="$1"
+  local output
+  if [[ $# -ge 2 ]]; then
+    output="$2"
+  else
+    output="${input%.*}.wav"
+  fi
+
+  if [[ ! -f "$input" ]]; then
+    echo "mp4towav: file not found: $input" >&2
+    return 1
+  fi
+
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "mp4towav: ffmpeg is required (brew install ffmpeg)" >&2
+    return 1
+  fi
+
+  echo "Extracting audio: $input -> $output" >&2
+  ffmpeg -y -i "$input" -vn -acodec pcm_s16le -ac 1 -ar 16000 "$output" || return 1
+  echo "Saved: $output" >&2
+}

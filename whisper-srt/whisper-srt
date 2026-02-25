@@ -1,0 +1,108 @@
+# whisper-srt: Generate SRT subtitles from video/audio via whisper-server
+# Source: source ~/development/mac-tools/whisper-srt/whisper-srt
+
+: "${WHISPER_SRT_MODEL:=/Users/vanabel/.33ZiMu/models/ggml-medium.en.bin}"
+: "${WHISPER_SRT_HOST:=127.0.0.1}"
+: "${WHISPER_SRT_PORT:=8080}"
+: "${WHISPER_SRT_SERVER_PATH:=whisper-server}"
+: "${WHISPER_SRT_KEEP_WAV:=0}"
+: "${WHISPER_SRT_THREADS:=8}"
+
+whisper-srt() {
+  if [[ $# -lt 1 ]]; then
+    echo "usage: whisper-srt <video-or-audio-file> [output.srt]" >&2
+    echo "  Converts MP4/video to WAV, sends to whisper-server, generates SRT subtitles." >&2
+    echo "" >&2
+    echo "  Environment:" >&2
+    echo "    WHISPER_SRT_MODEL    Model path (default: $WHISPER_SRT_MODEL)" >&2
+    echo "    WHISPER_SRT_HOST     Server host (default: $WHISPER_SRT_HOST)" >&2
+    echo "    WHISPER_SRT_PORT     Server port (default: $WHISPER_SRT_PORT)" >&2
+    echo "    WHISPER_SRT_THREADS  Server threads (default: $WHISPER_SRT_THREADS, M4: 8–10)" >&2
+    return 1
+  fi
+
+  local input="$1"
+  local output
+  if [[ $# -ge 2 ]]; then
+    output="$2"
+  else
+    output="${input%.*}.srt"
+  fi
+
+  if [[ ! -f "$input" ]]; then
+    echo "whisper-srt: file not found: $input" >&2
+    return 1
+  fi
+
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "whisper-srt: ffmpeg is required (brew install ffmpeg)" >&2
+    return 1
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "whisper-srt: curl is required" >&2
+    return 1
+  fi
+
+  local ext="${input##*.}"
+  local wav_file
+  local need_convert=true
+
+  if [[ "${ext:l}" == "wav" ]]; then
+    wav_file="$input"
+    need_convert=false
+  else
+    wav_file="${TMPDIR:-/tmp}/whisper-srt-$$.wav"
+    echo "Converting to WAV: $input" >&2
+    echo "  -> $wav_file" >&2
+    if ! ffmpeg -y -loglevel error -i "$input" -ar 16000 -ac 1 -c:a pcm_s16le "$wav_file"; then
+      echo "whisper-srt: ffmpeg conversion failed" >&2
+      [[ -f "$wav_file" ]] && rm -f "$wav_file"
+      return 1
+    fi
+  fi
+
+  local url="http://${WHISPER_SRT_HOST}:${WHISPER_SRT_PORT}/inference"
+  echo "Uploading & transcribing via whisper-server..." >&2
+
+  local srt_content
+  if ! srt_content=$(curl -# -S -X POST "$url" \
+    -F "file=@$wav_file" \
+    -F "temperature=0.0" \
+    -F "response_format=srt"); then
+    echo "whisper-srt: request failed" >&2
+    [[ "$need_convert" == true && -f "$wav_file" ]] && rm -f "$wav_file"
+    return 1
+  fi
+
+  if [[ "$need_convert" == true && -f "$wav_file" ]]; then
+    if [[ "${WHISPER_SRT_KEEP_WAV}" == "1" || "${WHISPER_SRT_KEEP_WAV}" == "true" ]]; then
+      echo "Kept WAV: $wav_file" >&2
+    else
+      rm -f "$wav_file"
+    fi
+  fi
+
+  if [[ -z "$srt_content" ]]; then
+    echo "whisper-srt: empty response from server" >&2
+    return 1
+  fi
+
+  # Check for JSON error response
+  if [[ "$srt_content" == \{* ]]; then
+    echo "whisper-srt: server error: $srt_content" >&2
+    return 1
+  fi
+
+  echo "$srt_content" > "$output"
+  echo "Saved: $output" >&2
+}
+
+whisper-srt-server() {
+  echo "Starting whisper-server with model: $WHISPER_SRT_MODEL" >&2
+  if [[ ! -f "$WHISPER_SRT_MODEL" ]]; then
+    echo "whisper-srt-server: model not found: $WHISPER_SRT_MODEL" >&2
+    return 1
+  fi
+  exec "$WHISPER_SRT_SERVER_PATH" -m "$WHISPER_SRT_MODEL" -t "$WHISPER_SRT_THREADS" --host "$WHISPER_SRT_HOST" --port "$WHISPER_SRT_PORT"
+}
