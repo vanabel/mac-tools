@@ -1,30 +1,62 @@
 # whisper-srt: Generate SRT subtitles from video/audio via whisper-server
 # Source: source ~/development/mac-tools/whisper-srt/whisper-srt
 
+WHISPER_SRT_ROOT="${WHISPER_SRT_ROOT:-${MAC_TOOLS_ROOT:-$HOME/development/mac-tools}/whisper-srt}"
 : "${WHISPER_SRT_MODEL:=/Users/vanabel/.33ZiMu/models/ggml-medium.en.bin}"
 : "${WHISPER_SRT_HOST:=127.0.0.1}"
 : "${WHISPER_SRT_PORT:=8080}"
 : "${WHISPER_SRT_SERVER_PATH:=whisper-server}"
 : "${WHISPER_SRT_KEEP_WAV:=0}"
 : "${WHISPER_SRT_THREADS:=8}"
+# Optional: set language (e.g. zh, en). Empty = auto-detect. Use zh for Chinese WAV.
+: "${WHISPER_SRT_LANGUAGE:=}"
 
 whisper-srt() {
   if [[ $# -lt 1 ]]; then
-    echo "usage: whisper-srt <video-or-audio-file> [output.srt]" >&2
+    echo "usage: whisper-srt [-l LANG | --lang LANG] <video-or-audio-file> [output.srt]" >&2
     echo "  Converts MP4/video to WAV, sends to whisper-server, generates SRT subtitles." >&2
+    echo "" >&2
+    echo "  Options:" >&2
+    echo "    -l, --lang LANG       Language code (e.g. zh for Chinese, en for English)." >&2
+    echo "                         Without this, server defaults to en. Use zh for 中文." >&2
     echo "" >&2
     echo "  Environment:" >&2
     echo "    WHISPER_SRT_MODEL    Model path (default: $WHISPER_SRT_MODEL)" >&2
     echo "    WHISPER_SRT_HOST     Server host (default: $WHISPER_SRT_HOST)" >&2
     echo "    WHISPER_SRT_PORT     Server port (default: $WHISPER_SRT_PORT)" >&2
     echo "    WHISPER_SRT_THREADS  Server threads (default: $WHISPER_SRT_THREADS, M4: 8–10)" >&2
+    echo "    WHISPER_SRT_LANGUAGE Default language if -l not used (e.g. zh, en); empty = en" >&2
     return 1
   fi
 
-  local input="$1"
+  local lang="$WHISPER_SRT_LANGUAGE"
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -l|--lang)
+        if [[ -z "${2:-}" ]]; then
+          echo "whisper-srt: -l/--lang requires a language code (e.g. zh, en)" >&2
+          return 1
+        fi
+        lang="$2"
+        shift 2
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [[ ${#args[@]} -lt 1 ]]; then
+    echo "whisper-srt: missing input file" >&2
+    return 1
+  fi
+
+  local input="${args[1]}"
   local output
-  if [[ $# -ge 2 ]]; then
-    output="$2"
+  if [[ ${#args[@]} -ge 2 ]]; then
+    output="${args[2]}"
   else
     output="${input%.*}.srt"
   fi
@@ -65,11 +97,11 @@ whisper-srt() {
   local url="http://${WHISPER_SRT_HOST}:${WHISPER_SRT_PORT}/inference"
   echo "Uploading & transcribing via whisper-server..." >&2
 
+  local curl_form=(-F "file=@$wav_file" -F "temperature=0.0" -F "response_format=srt")
+  [[ -n "$lang" ]] && curl_form+=(-F "language=$lang")
+
   local srt_content
-  if ! srt_content=$(curl -# -S -X POST "$url" \
-    -F "file=@$wav_file" \
-    -F "temperature=0.0" \
-    -F "response_format=srt"); then
+  if ! srt_content=$(curl -# -S -X POST "$url" "${curl_form[@]}"); then
     echo "whisper-srt: request failed" >&2
     [[ "$need_convert" == true && -f "$wav_file" ]] && rm -f "$wav_file"
     return 1
@@ -105,4 +137,52 @@ whisper-srt-server() {
     return 1
   fi
   exec "$WHISPER_SRT_SERVER_PATH" -m "$WHISPER_SRT_MODEL" -t "$WHISPER_SRT_THREADS" --host "$WHISPER_SRT_HOST" --port "$WHISPER_SRT_PORT"
+}
+
+# Speaker diarization: transcribe with whisper-server + pyannote, output SRT with [Speaker 1], [Speaker 2]...
+# Requires: pip install -r $WHISPER_SRT_ROOT/diarize/requirements.txt, HF_TOKEN, and running whisper-server
+whisper-srt-diarize() {
+  if [[ $# -lt 1 ]]; then
+    echo "usage: whisper-srt-diarize [-l LANG] <audio-or-video> [output.srt]" >&2
+    echo "  Transcribe with whisper-server and mark speakers (pyannote). Output: SRT with [Speaker 1], [Speaker 2]..." >&2
+    echo "  Requires: HF_TOKEN, diarize/requirements.txt, and whisper-server running." >&2
+    echo "  Use -l zh for Chinese." >&2
+    return 1
+  fi
+  local lang="$WHISPER_SRT_LANGUAGE"
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -l|--lang) lang="${2:-}"; shift 2 ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  [[ ${#args[@]} -lt 1 ]] && { echo "whisper-srt-diarize: missing input file" >&2; return 1; }
+  local input="${args[1]}"
+  local output="${args[2]:-${input%.*}.srt}"
+  if [[ ! -f "$input" ]]; then
+    echo "whisper-srt-diarize: file not found: $input" >&2
+    return 1
+  fi
+  local wav_file="$input"
+  local need_convert=false
+  if [[ "${input##*.}" != "wav" && "${input##*.}" != "WAV" ]]; then
+    need_convert=true
+    wav_file="${TMPDIR:-/tmp}/whisper-srt-diarize-$$.wav"
+    echo "Converting to WAV: $input" >&2
+    ffmpeg -y -loglevel error -i "$input" -ar 16000 -ac 1 -c:a pcm_s16le "$wav_file" || return 1
+  fi
+  export WHISPER_SRT_SERVER_URL="http://${WHISPER_SRT_HOST}:${WHISPER_SRT_PORT}/inference"
+  local py_script="$WHISPER_SRT_ROOT/diarize/whisper_srt_diarize.py"
+  if [[ ! -f "$py_script" ]]; then
+    echo "whisper-srt-diarize: script not found: $py_script" >&2
+    [[ "$need_convert" == true && -f "$wav_file" ]] && rm -f "$wav_file"
+    return 1
+  fi
+  local lang_arg=()
+  [[ -n "$lang" ]] && lang_arg=(-l "$lang")
+  python3 "$py_script" "$wav_file" "$output" "${lang_arg[@]}" || true
+  local ret=$?
+  [[ "$need_convert" == true && -f "$wav_file" ]] && rm -f "$wav_file"
+  return $ret
 }

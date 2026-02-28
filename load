@@ -21,6 +21,7 @@ mac-tools-help() {
   printf "  %-22s  %s\n" "mp4towav"             "Extract 16 kHz mono WAV from video"
   printf "  %-22s  %s\n" "whisper-srt"          "Generate SRT from video via whisper-server"
   printf "  %-22s  %s\n" "whisper-srt-server"   "Start whisper-server"
+  printf "  %-22s  %s\n" "whisper-srt-diarize"  "SRT with speaker labels (pyannote + whisper-server)"
   printf "  %-22s  %s\n" "mp4tomp3"             "Extract MP3 from MP4"
   printf "  %-22s  %s\n" "ffcompress"           "Compress MOV/MP4 to smaller MP4 (VideoToolbox)"
   printf "  %-22s  %s\n" "pdfextract"           "Extract pages from PDF (qpdf)"

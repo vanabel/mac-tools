@@ -42,6 +42,10 @@ whisper-srt video.mp4 subtitles.srt
 
 # WAV files are sent directly (no conversion)
 whisper-srt audio.wav
+
+# Chinese (中文): use -l zh or server will default to English
+whisper-srt -l zh "通话录音.wav"
+# Or: export WHISPER_SRT_LANGUAGE=zh  then  whisper-srt file.wav
 ```
 
 #### Workflow
@@ -60,6 +64,32 @@ whisper-srt audio.wav
 | `WHISPER_SRT_SERVER_PATH` | `whisper-server` | whisper-server binary |
 | `WHISPER_SRT_KEEP_WAV` | `0` | Set to `1` to keep temp WAV after conversion |
 | `WHISPER_SRT_THREADS` | `8` | Server CPU threads (M4: use 8–10) |
+| `WHISPER_SRT_LANGUAGE` | *(empty)* | Language code (e.g. `zh`, `en`). Override with `-l zh` for 中文. |
+
+#### Speaker diarization (mark speakers)
+
+To get SRT with **speaker labels** (e.g. `[Speaker 1]`, `[Speaker 2]`), use **whisper-srt-diarize**. It runs [pyannote](https://github.com/pyannote/pyannote-audio) for “who spoke when” and merges with whisper-server transcription.
+
+**Requirements**
+
+- whisper-server running (same as above)
+- Python 3 with deps: `pip install -r whisper-srt/diarize/requirements.txt`
+- [Hugging Face token](https://huggingface.co/settings/tokens) with access to [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) (accept the model terms once on the page)
+
+**Usage**
+
+```bash
+export HF_TOKEN=your_huggingface_token
+
+# Start whisper-server in another terminal
+whisper-srt-server
+
+# SRT with [Speaker 1], [Speaker 2]... (use -l zh for Chinese)
+whisper-srt-diarize -l zh "通话录音.wav"
+# Output: 通话录音.srt
+```
+
+Output lines look like: `[Speaker 1] 你好，今天天气怎么样？` and `[Speaker 2] 还不错。`
 
 #### Acceleration (Apple Silicon M1–M4)
 
@@ -151,6 +181,17 @@ whisper-srt audio.wav
 | `WHISPER_SRT_SERVER_PATH` | `whisper-server` | whisper-server 可执行文件 |
 | `WHISPER_SRT_KEEP_WAV` | `0` | 设为 `1` 可在转换后保留临时 WAV |
 | `WHISPER_SRT_THREADS` | `8` | 服务器 CPU 线程数（M4 建议 8–10） |
+
+#### 说话人区分（标出谁在说话）
+
+需要带 **说话人标记** 的 SRT（如 `[Speaker 1]`、`[Speaker 2]`）时，使用 **whisper-srt-diarize**。内部用 [pyannote](https://github.com/pyannote/pyannote-audio) 做“谁在何时说话”，再与 whisper-server 的转写结果合并。
+
+需先安装：`pip install -r whisper-srt/diarize/requirements.txt`，并设置 Hugging Face 的 `HF_TOKEN`（且在 [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) 页面同意模型条款）。
+
+```bash
+export HF_TOKEN=你的_token
+whisper-srt-diarize -l zh "通话录音.wav"   # 输出：通话录音.srt，带 [Speaker 1] 等标记
+```
 
 #### 加速（Apple Silicon M1–M4）
 
