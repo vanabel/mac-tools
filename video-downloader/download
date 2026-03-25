@@ -9,10 +9,12 @@ video-download() {
   fi
   local ext_opts=()
   if command -v aria2c &>/dev/null; then
-    ext_opts=(--external-downloader aria2c --external-downloader-args "aria2c:-x 16 -k 1M")
+    ext_opts=(--external-downloader aria2c --external-downloader-args "aria2c:-x 4 -k 1M --retry-wait=5")
   fi
   yt-dlp "${ext_opts[@]}" \
-    -f "bestvideo[ext=mp4][vcodec=mpeg4]+bestaudio[ext=mp4][acodec=ac3]/best[ext=mp4]" \
+    --retries 10 --fragment-retries 10 \
+    -f "bestvideo[height>=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]" \
+    --merge-output-format mp4 \
     -o "%(title)s.%(ext)s" "$1"
 }
 

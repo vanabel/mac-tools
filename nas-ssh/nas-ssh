@@ -1,0 +1,209 @@
+# NAS SSH helpers (login + scp/rsync upload)
+# Source: source ~/development/mac-tools/nas-ssh/nas-ssh
+
+# -------- Hosts --------
+NAS_PUBLIC_HOST="vanabel@ssh.vanabel.cn"
+
+NAS_LOCAL_HOST="vanabel@192.168.8.38"
+NAS_LOCAL_PORT="16022"
+
+NAS_ZERO_HOST="vanabel@192.168.2.38"
+NAS_ZERO_PORT="16022"
+
+# Where to upload by default
+NAS_DEFAULT_REMOTE_DIR="/volume1/video/MeetingRecords/"
+
+# Keep-alive to reduce disconnects during long uploads
+_nas_ssh_keepalive_opts="-o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o ConnectTimeout=10"
+
+# If previous shell session still has same-name aliases, remove them first.
+unalias nas naslocal naszero scpnas scpnaslocal scpnaszero rsyncnas rsyncnaslocal rsyncnaszero 2>/dev/null
+
+nas() {
+  # Usage: nas [remote_command...]
+  ssh $_nas_ssh_keepalive_opts "$NAS_PUBLIC_HOST" "$@"
+}
+
+naslocal() {
+  # Usage: naslocal [remote_command...]
+  ssh -p "$NAS_LOCAL_PORT" $_nas_ssh_keepalive_opts "$NAS_LOCAL_HOST" "$@"
+}
+
+naszero() {
+  # Usage: naszero [remote_command...]
+  ssh -p "$NAS_ZERO_PORT" $_nas_ssh_keepalive_opts "$NAS_ZERO_HOST" "$@"
+}
+
+_nas_scp_dest_for_host() {
+  # Usage: _nas_scp_dest_for_host <host> <default_dir> <dest_arg>
+  local host="$1"
+  local default_dir="$2"
+  local dest_arg="${3:-}"
+
+  if [[ -z "$dest_arg" ]]; then
+    echo "${host}:${default_dir}"
+    return 0
+  fi
+
+  # If user provided full user@host:/path, keep it.
+  if [[ "$dest_arg" == *":"* ]]; then
+    echo "$dest_arg"
+    return 0
+  fi
+
+  # Otherwise treat it as a remote path (absolute or relative).
+  echo "${host}:${dest_arg}"
+}
+
+_nas_rsync_dest_for_host() {
+  # Usage: _nas_rsync_dest_for_host <host> <default_dir> <dest_arg>
+  local host="$1"
+  local default_dir="$2"
+  local dest_arg="${3:-}"
+
+  if [[ -z "$dest_arg" ]]; then
+    echo "${host}:${default_dir}"
+    return 0
+  fi
+
+  # If user provided full user@host:/path, keep it.
+  if [[ "$dest_arg" == *":"* ]]; then
+    echo "$dest_arg"
+    return 0
+  fi
+
+  echo "${host}:${dest_arg}"
+}
+
+scpnas() {
+  # Usage: scpnas <source_path> [remote_dir]
+  # Examples:
+  #   scpnas ./a.mp4 /volume1/video/MeetingRecords/
+  #   scpnas ./a.mp4 vanabel@192.168.2.38:/volume1/video/MeetingRecords/
+  local src="$1"
+  local dest_arg="${2:-$NAS_DEFAULT_REMOTE_DIR}"
+
+  if [[ "$src" == "-h" || "$src" == "--help" || "$src" == "--usage" || -z "$src" ]]; then
+    echo "Usage: scpnas <source_path> [remote_dir]"
+    echo "Default destination: ${NAS_ZERO_HOST}:${NAS_DEFAULT_REMOTE_DIR}"
+    return 0
+  fi
+
+  local dest
+  dest="$(_nas_scp_dest_for_host "$NAS_ZERO_HOST" "$NAS_DEFAULT_REMOTE_DIR" "$dest_arg")"
+  scp -pr -P "$NAS_ZERO_PORT" "$src" "$dest"
+}
+
+scpnaslocal() {
+  # Usage: scpnaslocal <source_path> [remote_dir]
+  local src="$1"
+  local dest_arg="${2:-$NAS_DEFAULT_REMOTE_DIR}"
+
+  if [[ "$src" == "-h" || "$src" == "--help" || "$src" == "--usage" || -z "$src" ]]; then
+    echo "Usage: scpnaslocal <source_path> [remote_dir]"
+    echo "Default destination: ${NAS_LOCAL_HOST}:${NAS_DEFAULT_REMOTE_DIR}"
+    return 0
+  fi
+
+  local dest
+  dest="$(_nas_scp_dest_for_host "$NAS_LOCAL_HOST" "$NAS_DEFAULT_REMOTE_DIR" "$dest_arg")"
+  scp -pr -P "$NAS_LOCAL_PORT" "$src" "$dest"
+}
+
+scpnaszero() {
+  # Usage: scpnaszero <source_path> [remote_dir]
+  local src="$1"
+  local dest_arg="${2:-$NAS_DEFAULT_REMOTE_DIR}"
+
+  if [[ "$src" == "-h" || "$src" == "--help" || "$src" == "--usage" || -z "$src" ]]; then
+    echo "Usage: scpnaszero <source_path> [remote_dir]"
+    echo "Default destination: ${NAS_ZERO_HOST}:${NAS_DEFAULT_REMOTE_DIR}"
+    return 0
+  fi
+
+  local dest
+  dest="$(_nas_scp_dest_for_host "$NAS_ZERO_HOST" "$NAS_DEFAULT_REMOTE_DIR" "$dest_arg")"
+  scp -pr -P "$NAS_ZERO_PORT" "$src" "$dest"
+}
+
+rsyncnas() {
+  # Usage: rsyncnas <source_path> [user@host:/remote_path]
+  # Default: ${NAS_ZERO_HOST}:${NAS_DEFAULT_REMOTE_DIR}
+  local src="$1"
+  local dest_arg="${2:-$NAS_DEFAULT_REMOTE_DIR}"
+
+  if [[ "$src" == "-h" || "$src" == "--help" || "$src" == "--usage" || -z "$src" ]]; then
+    echo "Usage: rsyncnas <source_path> [user@host:/remote_path]"
+    echo "Default destination: ${NAS_ZERO_HOST}:${NAS_DEFAULT_REMOTE_DIR}"
+    return 0
+  fi
+
+  if ! command -v rsync >/dev/null 2>&1; then
+    echo "rsync not found in PATH" >&2
+    return 1
+  fi
+
+  local dest
+  dest="$(_nas_rsync_dest_for_host "$NAS_ZERO_HOST" "$NAS_DEFAULT_REMOTE_DIR" "$dest_arg")"
+  rsync -avh \
+    --iconv=UTF-8-MAC,UTF-8 \
+    -e "ssh -p $NAS_ZERO_PORT $_nas_ssh_keepalive_opts" \
+    --info=progress2 \
+    --partial \
+    "$src" "$dest"
+}
+
+rsyncnaslocal() {
+  # Usage: rsyncnaslocal <source_path> [user@host:/remote_path]
+  # Default: ${NAS_LOCAL_HOST}:${NAS_DEFAULT_REMOTE_DIR}
+  local src="$1"
+  local dest_arg="${2:-$NAS_DEFAULT_REMOTE_DIR}"
+
+  if [[ "$src" == "-h" || "$src" == "--help" || "$src" == "--usage" || -z "$src" ]]; then
+    echo "Usage: rsyncnaslocal <source_path> [user@host:/remote_path]"
+    echo "Default destination: ${NAS_LOCAL_HOST}:${NAS_DEFAULT_REMOTE_DIR}"
+    return 0
+  fi
+
+  if ! command -v rsync >/dev/null 2>&1; then
+    echo "rsync not found in PATH" >&2
+    return 1
+  fi
+
+  local dest
+  dest="$(_nas_rsync_dest_for_host "$NAS_LOCAL_HOST" "$NAS_DEFAULT_REMOTE_DIR" "$dest_arg")"
+  rsync -avh \
+    --iconv=UTF-8-MAC,UTF-8 \
+    -e "ssh -p $NAS_LOCAL_PORT $_nas_ssh_keepalive_opts" \
+    --info=progress2 \
+    --partial \
+    "$src" "$dest"
+}
+
+rsyncnaszero() {
+  # Usage: rsyncnaszero <source_path> [user@host:/remote_path]
+  # Default: ${NAS_ZERO_HOST}:${NAS_DEFAULT_REMOTE_DIR}
+  local src="$1"
+  local dest_arg="${2:-$NAS_DEFAULT_REMOTE_DIR}"
+
+  if [[ "$src" == "-h" || "$src" == "--help" || "$src" == "--usage" || -z "$src" ]]; then
+    echo "Usage: rsyncnaszero <source_path> [user@host:/remote_path]"
+    echo "Default destination: ${NAS_ZERO_HOST}:${NAS_DEFAULT_REMOTE_DIR}"
+    return 0
+  fi
+
+  if ! command -v rsync >/dev/null 2>&1; then
+    echo "rsync not found in PATH" >&2
+    return 1
+  fi
+
+  local dest
+  dest="$(_nas_rsync_dest_for_host "$NAS_ZERO_HOST" "$NAS_DEFAULT_REMOTE_DIR" "$dest_arg")"
+  rsync -avh \
+    --iconv=UTF-8-MAC,UTF-8 \
+    -e "ssh -p $NAS_ZERO_PORT $_nas_ssh_keepalive_opts" \
+    --info=progress2 \
+    --partial \
+    "$src" "$dest"
+}
+

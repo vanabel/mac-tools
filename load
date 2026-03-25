@@ -9,6 +9,7 @@ source "$MAC_TOOLS_ROOT/mp4towav/mp4towav"
 source "$MAC_TOOLS_ROOT/whisper-srt/whisper-srt"
 source "$MAC_TOOLS_ROOT/media-tools/media-tools"
 source "$MAC_TOOLS_ROOT/pdf-tools/pdf-tools"
+source "$MAC_TOOLS_ROOT/nas-ssh/nas-ssh"
 
 # Show all mac-tools functions in a table (run: mac-tools-help or mthelp)
 mac-tools-help() {
@@ -27,6 +28,15 @@ mac-tools-help() {
   printf "  %-22s  %s\n" "pdfextract"           "Extract pages from PDF (qpdf)"
   printf "  %-22s  %s\n" "pdf_crop"             "Crop PDF margins by cm"
   printf "  %-22s  %s\n" "pdfcompress"         "Compress PDF to screen quality"
+  printf "  %-22s  %s\n" "nas"                  "SSH login to NAS (public host)"
+  printf "  %-22s  %s\n" "naslocal"             "SSH login to NAS (192.168.8.38:16022)"
+  printf "  %-22s  %s\n" "naszero"              "SSH login to NAS (192.168.2.38:16022)"
+  printf "  %-22s  %s\n" "scpnas"               "Upload via scp (default MeetingRecords)"
+  printf "  %-22s  %s\n" "scpnaslocal"          "Upload via scp to NAS local"
+  printf "  %-22s  %s\n" "scpnaszero"           "Upload via scp to NAS zero"
+  printf "  %-22s  %s\n" "rsyncnas"             "Upload via rsync (default MeetingRecords)"
+  printf "  %-22s  %s\n" "rsyncnaslocal"        "Upload via rsync to NAS local"
+  printf "  %-22s  %s\n" "rsyncnaszero"         "Upload via rsync to NAS zero"
   printf "\n  Run \033[1m<function> -h\033[0m or \033[1m<function> --help\033[0m for usage of each.\n\n"
 }
 
