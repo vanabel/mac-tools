@@ -70,3 +70,169 @@ ffcompress() {
     -movflags +faststart \
     "$output"
 }
+
+# ---- Convert video to MP4 with sane defaults (Apple Silicon friendly) ----
+# Usage:
+#   videotomp4 [--h264|--h265|--copy] [--bitrate kbps] [--no-audio] [-o out.mp4] input1 [input2 ...]
+# Defaults:
+#   - encoder: h264_videotoolbox (best compatibility)
+#   - audio: aac 128k
+videotomp4() {
+  local mode="h264"
+  local bitrate_kbps="4500"
+  local no_audio="0"
+  local overwrite="0"
+  local output=""
+  local -a inputs=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --h264)
+        mode="h264"
+        shift
+        ;;
+      --h265|--hevc)
+        mode="h265"
+        shift
+        ;;
+      --copy)
+        mode="copy"
+        shift
+        ;;
+      --bitrate|-b)
+        if [[ -z "$2" ]]; then
+          echo "videotomp4: missing value for $1" >&2
+          return 1
+        fi
+        bitrate_kbps="$2"
+        shift 2
+        ;;
+      --no-audio|-an)
+        no_audio="1"
+        shift
+        ;;
+      --overwrite|-y)
+        overwrite="1"
+        shift
+        ;;
+      --output|-o)
+        if [[ -z "$2" ]]; then
+          echo "videotomp4: missing value for $1" >&2
+          return 1
+        fi
+        output="$2"
+        shift 2
+        ;;
+      -h|--help)
+        cat <<'EOF'
+Usage: videotomp4 [options] input1 [input2 ...]
+
+Options:
+  --h264              Use H.264 hardware encoding (default, most compatible)
+  --h265, --hevc      Use H.265/HEVC hardware encoding (smaller size)
+  --copy              Remux only (no re-encode), fastest when compatible
+  -b, --bitrate N     Video bitrate in kbps for re-encode (default: 4500)
+  -an, --no-audio     Disable audio in output
+  -o, --output FILE   Output file name (single input only)
+  -y, --overwrite     Overwrite existing output file
+  -h, --help          Show this help
+
+Examples:
+  videotomp4 screen.mov
+  videotomp4 --h265 demo.mov
+  videotomp4 --copy clip.mov
+  videotomp4 --h264 -b 3500 *.mov
+EOF
+        return 0
+        ;;
+      -*)
+        echo "videotomp4: unknown option: $1" >&2
+        return 1
+        ;;
+      *)
+        inputs+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [[ ${#inputs[@]} -eq 0 ]]; then
+    echo "Usage: videotomp4 [--h264|--h265|--copy] [--bitrate kbps] [--no-audio] [-o out.mp4] input1 [input2 ...]"
+    return 1
+  fi
+
+  if [[ -n "$output" && ${#inputs[@]} -ne 1 ]]; then
+    echo "videotomp4: -o/--output can only be used with one input file" >&2
+    return 1
+  fi
+
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "media-tools: ffmpeg is required (brew install ffmpeg)" >&2
+    return 1
+  fi
+
+  local input out base overwrite_flag vcodec
+  if [[ "$overwrite" == "1" ]]; then
+    overwrite_flag="-y"
+  else
+    overwrite_flag="-n"
+  fi
+
+  for input in "${inputs[@]}"; do
+    if [[ ! -f "$input" ]]; then
+      echo "videotomp4: file not found: $input" >&2
+      continue
+    fi
+
+    if [[ -n "$output" ]]; then
+      out="$output"
+    else
+      base="${input%.*}"
+      if [[ "$mode" == "copy" ]]; then
+        out="${base}.mp4"
+      elif [[ "$mode" == "h265" ]]; then
+        out="${base}_h265.mp4"
+      else
+        out="${base}_h264.mp4"
+      fi
+    fi
+
+    if [[ "$mode" == "copy" ]]; then
+      echo "videotomp4: remux $input -> $out"
+      if [[ "$no_audio" == "1" ]]; then
+        ffmpeg $overwrite_flag -i "$input" -map 0:v:0 -c copy -an "$out"
+      else
+        ffmpeg $overwrite_flag -i "$input" -map 0:v:0 -map '0:a?' -c copy "$out"
+      fi
+      continue
+    fi
+
+    if [[ "$mode" == "h265" ]]; then
+      vcodec="hevc_videotoolbox"
+    else
+      vcodec="h264_videotoolbox"
+    fi
+
+    if [[ "$no_audio" == "1" ]]; then
+      echo "videotomp4: transcode($mode) $input -> $out (no audio)"
+      ffmpeg $overwrite_flag -stats -stats_period 0.5 \
+        -hwaccel videotoolbox \
+        -i "$input" \
+        -map 0:v:0 \
+        -c:v "$vcodec" -b:v "${bitrate_kbps}k" \
+        -an \
+        -movflags +faststart \
+        "$out"
+    else
+      echo "videotomp4: transcode($mode) $input -> $out"
+      ffmpeg $overwrite_flag -stats -stats_period 0.5 \
+        -hwaccel videotoolbox \
+        -i "$input" \
+        -map 0:v:0 -map '0:a?' \
+        -c:v "$vcodec" -b:v "${bitrate_kbps}k" \
+        -c:a aac -b:a 128k \
+        -movflags +faststart \
+        "$out"
+    fi
+  done
+}

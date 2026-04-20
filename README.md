@@ -23,7 +23,7 @@ Personal toolkit for macOS. Shell scripts, functions, and utilities.
 | [**video-downloader**](./video-downloader/) | Download videos from YouTube, Rutube, etc. via yt-dlp |
 | [**whisper-srt**](./whisper-srt/) | Generate SRT subtitles from MP4/video via whisper-server |
 | [**mp4towav**](./mp4towav/) | Extract 16 kHz mono WAV from video for speech recognition |
-| [**media-tools**](./media-tools/) | mp4tomp3, ffcompress (extract MP3, compress video) |
+| [**media-tools**](./media-tools/) | mp4tomp3, videotomp4, ffcompress (extract MP3, convert/compress video) |
 | [**nas-ssh**](./nas-ssh/) | NAS SSH login + scp/rsync upload |
 | [**pdf-tools**](./pdf-tools/) | pdfextract, pdf_crop, pdfcompress |
 
@@ -52,7 +52,7 @@ Then run **`mthelp`** or **`mac-tools-help`** to see all functions in a table.
 | [**video-downloader**](./video-downloader/) | 通过 yt-dlp 从 YouTube、Rutube 等下载视频 |
 | [**whisper-srt**](./whisper-srt/) | 通过 whisper-server 从 MP4/视频生成 SRT 字幕 |
 | [**mp4towav**](./mp4towav/) | 从视频提取 16 kHz 单声道 WAV，用于语音识别 |
-| [**media-tools**](./media-tools/) | mp4tomp3、ffcompress（提 MP3、压视频） |
+| [**media-tools**](./media-tools/) | mp4tomp3、videotomp4、ffcompress（提 MP3、转/压视频） |
 | [**nas-ssh**](./nas-ssh/) | NAS SSH 登录 + scp/rsync 上传 |
 | [**pdf-tools**](./pdf-tools/) | pdfextract、pdf_crop、pdfcompress |
 
