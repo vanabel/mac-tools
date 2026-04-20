@@ -14,7 +14,13 @@ NAS_ZERO_PORT="16022"
 NAS_DEFAULT_REMOTE_DIR="/volume1/video/MeetingRecords/"
 
 # Keep-alive to reduce disconnects during long uploads
-_nas_ssh_keepalive_opts="-o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o ConnectTimeout=10"
+# ConnectTimeout must be long enough for Cloudflare Access (browser SSO) on nas();
+# 10s is too short and causes "timed out during banner exchange".
+_nas_ssh_keepalive_opts=(
+    -o ServerAliveInterval=60
+    -o ServerAliveCountMax=3
+    -o ConnectTimeout=120
+)
 
 # If previous shell session still has same-name aliases, remove them first.
 unalias nas naslocal naszero scpnas scpnaslocal scpnaszero rsyncnas rsyncnaslocal rsyncnaszero 2>/dev/null
@@ -206,4 +212,3 @@ rsyncnaszero() {
     --partial \
     "$src" "$dest"
 }
-
