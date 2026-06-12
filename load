@@ -18,7 +18,7 @@ mac-tools-help() {
   printf "  %s  %s\n" "----------------------" "----------------------------------------"
   printf "  %-22s  %s\n" "video-download"       "Download video as MP4 (yt-dlp)"
   printf "  %-22s  %s\n" "video-download-list"  "List formats for video URL"
-  printf "  %-22s  %s\n" "pdfmerge"             "Merge PDFs with bookmarks, natural sort"
+  printf "  %-22s  %s\n" "pdfmerge"             "Merge PDFs with bookmarks (use --sort for globs)"
   printf "  %-22s  %s\n" "mp4towav"             "Extract 16 kHz mono WAV from video"
   printf "  %-22s  %s\n" "whisper-srt"          "Generate SRT from video via whisper-server"
   printf "  %-22s  %s\n" "whisper-srt-server"   "Start whisper-server"

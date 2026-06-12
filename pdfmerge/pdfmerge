@@ -1,15 +1,22 @@
 function pdfmerge() {
+  local sort_flag=0
+  if [[ "$1" == "--sort" || "$1" == "-s" ]]; then
+    sort_flag=1
+    shift
+  fi
   if [[ $# -lt 2 ]]; then
-    echo "usage: $0 <out.pdf> <in1.pdf> <in2.pdf> ... <inn.pdf>" >&2
+    echo "usage: pdfmerge [--sort|-s] <out.pdf> <in1.pdf> <in2.pdf> ... <inn.pdf>" >&2
     return 1
   fi
   local output="$1"
   shift
   local inputs=("$@")
-  # Natural sort (Lecture-1, Lecture-2, ..., Lecture-10) instead of lexicographic
-  local sorted=()
-  while IFS= read -r line; do sorted+=("$line"); done < <(printf '%s\n' "${inputs[@]}" | sort -V)
-  inputs=("${sorted[@]}")
+  if (( sort_flag )); then
+    # Natural sort (Lecture-1, Lecture-2, ..., Lecture-10) instead of lexicographic
+    local sorted=()
+    while IFS= read -r line; do sorted+=("$line"); done < <(printf '%s\n' "${inputs[@]}" | sort -V)
+    inputs=("${sorted[@]}")
+  fi
 
   # Prefer venv with pypdf (avoids pip "externally-managed-environment" on macOS)
   local py=
